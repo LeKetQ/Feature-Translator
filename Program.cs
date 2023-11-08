@@ -1,5 +1,5 @@
 ﻿using Newtonsoft.Json;
-using System.Runtime.CompilerServices;
+using System.Dynamic;
 using System.Runtime.Serialization;
 using System.Text;
 
@@ -47,57 +47,140 @@ class Program
 
                 if (response.IsSuccessStatusCode)
                 {
-                    // CREATE LIST OF ALL CHILDREN OF ROOT-CONTENT-ITEM ID's
-                    var content = await launch.GetContent(response);
+                    // CREATE LIST OF ALL ID's OF CHILDREN OF ROOT-CONTENT-ITEM
+                    var content = await launch.ReadContent(response);
                     var rootChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
 
-                    // GET ALL DATA FROM ALL CHILDREN OF ROOT-CONTENT-ITEM
-                    foreach ( var child in rootChildren )
+                    #region - FIRST LEVEL - CHILDREN OF ROOT CONTENT
+                    foreach (var child in rootChildren)
                     {
-                        string postApiUrl = "https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/inheritance";
-                        var rawPayload = $"{{contentItemId: {child.Id}, channel: \"Internal\", languageCode: \"nl-BE\"}}";
-                        var payload = new StringContent(rawPayload, Encoding.UTF8, "application/json");
-                        response = await client.PostAsync(postApiUrl, payload);
+                        var success = int.TryParse(child.Id, out var id);
 
-                        if (response.IsSuccessStatusCode)
+                        if (success)
                         {
-                            content = await launch.GetContent(response);
-                            var deserializedContent = JsonConvert.DeserializeObject<List<ContentData>>(content);
+                            // GET ALL DATA FROM ALL CHILDREN OF ROOT-CONTENT-ITEM
+                            response = await launch.GetContentData(client, id);
 
-                            // DEEPLE TRANSLATE 
-                            // LOOP OVER THE PARENT CONTENT, TRANSLATE AND PUT BACK THROUGH API
-                        }
-                        else
-                        {
-                            Console.WriteLine("Get Data from Root-Content-Item failed \n");
-                            Console.WriteLine($"{await launch.GetContent(response)} \n");
+                            if (response.IsSuccessStatusCode)
+                            {
+                                content = await launch.ReadContent(response);
+                                var deserializedContent = JsonConvert.DeserializeObject<List<ContentData>>(content);
+
+                                foreach (var item in deserializedContent)
+                                {
+                                    // ALTER DATA ONLY FOR DATATYPE 0
+                                    if (item.DataType == 0)
+                                    {
+                                        // DEEPLE TRANSLATE 
+                                        item.Value = await launch.DeepleTranslate(client, item.Value);
+                                    }
+
+                                    item.Language = "fr-BE";
+                                }
+
+                                // PUT ALTERED DATA
+                                // TODO: PUT CONTENT DATA BACK THROUGH API
+                                // TODO: Check that data is altered... check api url?
+                                // TODO: ITEM PER ITEM OR ALL AT ONCE?
+                                //string putApiUrl = $"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/{id}";
+                                //var requestData = JsonConvert.SerializeObject(deserializedChildContent);
+                                //var request = new StringContent(requestData, Encoding.UTF8, "application/json");
+                                //response = await client.PutAsync(putApiUrl, request);
+                            }
+                            else
+                            {
+                                Console.WriteLine("Get Data from Root-Content-Item failed \n");
+                                Console.WriteLine($"{await launch.ReadContent(response)} \n");
+                            }
                         }
                     }
+                    #endregion
 
-                    foreach ( var child in rootChildren)
+                    #region - SECOND LEVEL - CHILDREN OF CHILDREN OF ROOT CONTENT
+                    // GET CHILDREN OF CHILDREN OF ROOT-CONTENT-ITEM AND GO AROUND AGAIN
+                    foreach (var child in rootChildren)
                     {
-                        // GET CHILDREN AND GO AROUND AGAIN
+                        var success = int.TryParse(child.Id, out int childId);
+
+                        if (success)
+                        {
+                            // GET THE CHILDREN OF CHILDREN
+                            response = await launch.GetChildren(client, childId);
+
+                            if (response.IsSuccessStatusCode)
+                            {
+                                // CREATE LIST OF CHILDREN OF CHILDREN ID's
+                                content = await launch.ReadContent(response);
+                                var secondLevelChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
+
+                                foreach (var secondLevelChild in secondLevelChildren)
+                                {
+                                    success = int.TryParse(secondLevelChild.Id, out int id);
+
+                                    if (success)
+                                    {
+                                        response = await launch.GetContentData(client, id);
+
+                                        if (response.IsSuccessStatusCode)
+                                        {
+                                            content = await launch.ReadContent(response);
+                                            var contentData = JsonConvert.DeserializeObject<List<ContentData>>(content);
+
+                                            foreach (var item in contentData)
+                                            {
+                                                // ALTER DATA ONLY FOR DATATYPE 0
+                                                if (item.DataType == 0)
+                                                {
+                                                    // DEEPLE TRANSLATE 
+                                                    item.Value = await launch.DeepleTranslate(client, item.Value);
+                                                }
+
+                                                item.Language = "fr-BE";
+                                            }
+
+                                            // PUT ALTERED DATA
+                                            // TODO: PUT CONTENT DATA BACK THROUGH API
+                                            // TODO: Check that data is altered... check api url?
+                                            // TODO: ITEM PER ITEM OR ALL AT ONCE?
+                                            //string putApiUrl = $"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/{id}";
+                                            //var requestData = JsonConvert.SerializeObject(deserializedChildContent);
+                                            //var request = new StringContent(requestData, Encoding.UTF8, "application/json");
+                                            //response = await client.PutAsync(putApiUrl, request);
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine($"Get Data from content {secondLevelChild.Id} failed \n");
+                                            Console.WriteLine($"{await launch.ReadContent(response)} \n");
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("Get Data from Child-Content-Item failed \n");
+                                Console.WriteLine($"{await launch.ReadContent(response)} \n");
+                            }
+                        }
                     }
-
-
+                    #endregion
                 }
                 else
                 {
                     Console.WriteLine("Get Root Children failed \n");
-                    Console.WriteLine($"{await launch.GetContent(response)} \n");
+                    Console.WriteLine($"{await launch.ReadContent(response)} \n");
                 }
             }
             else
             {
                 Console.WriteLine("Login failed \n");
-                Console.WriteLine($"{await launch.GetContent(response)} \n");
+                Console.WriteLine($"{await launch.ReadContent(response)} \n");
             }
 
 
 
 
 
-
+            #region - OLD CODE
             if (response.IsSuccessStatusCode)
             {
                 List<int> parentList = new List<int>() { 84, 1097, 1624 };
@@ -191,6 +274,24 @@ class Program
                 string errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"{errorContent} \n");
             }
+            #endregion
+        }
+    }
+
+    private async Task<string> DeepleTranslate(HttpClient client, string data)
+    {
+        var deepleApiUrl = "https://tide-travelworld8527-staging.azurewebsites.net/api/deepl";
+        var deepleRawPayload = $"{{text: \"{data}\", from: \"NL\", to: \"FR\"}}";
+        var deeplePayload = new StringContent(deepleRawPayload, Encoding.UTF8, "application/json");
+        var deepleResponse = await client.PostAsync(deepleApiUrl, deeplePayload);
+
+        if (deepleResponse.IsSuccessStatusCode)
+        {
+            return await deepleResponse.Content.ReadAsStringAsync();
+        }
+        else
+        {
+            return data;
         }
     }
 
@@ -222,7 +323,15 @@ class Program
         }
     }
 
-    private async Task<string> GetContent(HttpResponseMessage response)
+    private async Task<HttpResponseMessage> GetContentData(HttpClient client, int id)
+    {
+        string postApiUrl = "https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/inheritance";
+        var rawPayload = $"{{contentItemId: {id}, channel: \"Internal\", languageCode: \"nl-BE\"}}";
+        var payload = new StringContent(rawPayload, Encoding.UTF8, "application/json");
+        return await client.PostAsync(postApiUrl, payload);
+    }
+
+    private async Task<string> ReadContent(HttpResponseMessage response)
     {
         return await response.Content.ReadAsStringAsync();
     }
