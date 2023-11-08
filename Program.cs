@@ -287,12 +287,10 @@ class Program
 
         if (deepleResponse.IsSuccessStatusCode)
         {
-            return await deepleResponse.Content.ReadAsStringAsync();
+            data = await deepleResponse.Content.ReadAsStringAsync();
         }
-        else
-        {
-            return data;
-        }
+
+        return data.TrimStart('"').TrimEnd('"');
     }
 
     private async Task<HttpResponseMessage> Login(HttpClient client)
