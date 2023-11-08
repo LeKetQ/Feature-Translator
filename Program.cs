@@ -18,196 +18,207 @@ class Program
 
             if (response.IsSuccessStatusCode)
             {
-                // GET ALL CHILDREN FROM ROOT-CONTENT-ITEM
+                // GET ALL DATA FROM ROOT-CONTENT-ITEM
                 response = await GetChildren(client, null);
 
                 if (response.IsSuccessStatusCode)
                 {
-                    // CREATE LIST OF ALL ID's OF CHILDREN OF ROOT-CONTENT-ITEM
                     var content = await ReadContent(response);
                     var rootChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
 
-                    #region - FIRST LEVEL - CHILDREN OF ROOT CONTENT
                     foreach (var child in rootChildren)
                     {
                         var success = int.TryParse(child.Id, out var firstLevelId);
 
                         if (success)
                         {
-                            // GET ALL DATA FROM ALL CHILDREN OF ROOT-CONTENT-ITEM
-                            response = await GetContentData(client, firstLevelId);
+                            // GET, PROCESS AND PUT FIRST LEVEL DATA 
+                            var result = await GetAlterAndPutContent(client, firstLevelId);
 
-                            if (response.IsSuccessStatusCode)
+                            // GET SECOND LEVEL CHILDREN
+                            var secondLevelChildren = await GetChildren(client, firstLevelId);
+
+                            if (secondLevelChildren.IsSuccessStatusCode)
                             {
-                                content = await ReadContent(response);
-                                var contentData = JsonConvert.DeserializeObject<List<ContentData>>(content);
+                                var secondLevelContent = await ReadContent(secondLevelChildren);
+                                var secondLevelChildrenIds = JsonConvert.DeserializeObject<List<ContentId>>(secondLevelContent);
 
-                                foreach (var item in contentData)
+                                foreach (var secondLevelChildId in secondLevelChildrenIds)
                                 {
-                                    // ALTER DATA ONLY FOR DATATYPE 0
-                                    if (item.DataType == 0)
-                                    {
-                                        // DEEPLE TRANSLATE 
-                                        item.Value = await DeepleTranslate(client, item.Value);
-                                    }
-
-                                    item.Language = "fr-BE";
-                                }
-
-                                // PUT ALTERED DATA
-                                response = await PutContentData(client, contentData);
-                            }
-                            else
-                            {
-                                Console.WriteLine("Get Data from Root-Content-Item failed \n");
-                                Console.WriteLine($"{await ReadContent(response)} \n");
-                            }
-                        }
-                    }
-                    #endregion
-
-                    #region - SECOND LEVEL - CHILDREN OF CHILDREN OF ROOT CONTENT
-                    // GET CHILDREN OF CHILDREN OF ROOT-CONTENT-ITEM AND GO AROUND AGAIN
-                    foreach (var child in rootChildren)
-                    {
-                        var success = int.TryParse(child.Id, out int firstLevelId);
-
-                        if (success)
-                        {
-                            // GET THE CHILDREN OF CHILDREN
-                            response = await GetChildren(client, firstLevelId);
-
-                            if (response.IsSuccessStatusCode)
-                            {
-                                // CREATE LIST OF CHILDREN OF CHILDREN ID's
-                                content = await ReadContent(response);
-                                var secondLevelChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
-
-                                foreach (var secondLevelChild in secondLevelChildren)
-                                {
-                                    // TRANSLATE SECOND LEVEL
-                                    success = int.TryParse(secondLevelChild.Id, out int secondLevelId);
+                                    success = int.TryParse(secondLevelChildId.Id, out int secondLevelId);
 
                                     if (success)
                                     {
-                                        response = await GetContentData(client, secondLevelId);
+                                        // GET, PROCESS AND PUT SECOND LEVEL DATA 
+                                        result = await GetAlterAndPutContent(client, secondLevelId);
 
-                                        if (response.IsSuccessStatusCode)
+                                        // GET THIRD LEVEL CHILDREN
+                                        var thirdLevelChildren = await GetChildren(client, secondLevelId);
+
+                                        if (thirdLevelChildren.IsSuccessStatusCode)
                                         {
-                                            content = await ReadContent(response);
-                                            var contentData = JsonConvert.DeserializeObject<List<ContentData>>(content);
+                                            var thirdLevelContent = await ReadContent(thirdLevelChildren);
+                                            var thirdLevelChildrenIds = JsonConvert.DeserializeObject<List<ContentId>>(thirdLevelContent);
 
-                                            foreach (var item in contentData)
+                                            foreach (var thirdLevelChildId in thirdLevelChildrenIds)
                                             {
-                                                // ALTER DATA ONLY FOR DATATYPE 0
-                                                if (item.DataType == 0)
+                                                success = int.TryParse(thirdLevelChildId.Id, out int thirdLevelId);
+
+                                                if (success)
                                                 {
-                                                    // DEEPLE TRANSLATE 
-                                                    item.Value = await DeepleTranslate(client, item.Value);
+                                                    // GET, PROCESS AND PUT THIRD LEVEL DATA 
+                                                    result = await GetAlterAndPutContent(client, secondLevelId);
                                                 }
-
-                                                item.Language = "fr-BE";
                                             }
-
-                                            // PUT ALTERED DATA
-                                            response = await PutContentData(client, contentData);
-                                        }
-                                        else
-                                        {
-                                            Console.WriteLine($"Get Data from content {secondLevelChild.Id} failed \n");
-                                            Console.WriteLine($"{await ReadContent(response)} \n");
                                         }
                                     }
                                 }
                             }
-                            else
-                            {
-                                Console.WriteLine("Get Data from Child-Content-Item failed \n");
-                                Console.WriteLine($"{await ReadContent(response)} \n");
-                            }
                         }
+
+                        //#region - SECOND LEVEL - CHILDREN OF CHILDREN OF ROOT CONTENT
+                        //// GET CHILDREN OF CHILDREN OF ROOT-CONTENT-ITEM AND GO AROUND AGAIN
+                        //foreach (var child in rootChildren)
+                        //{
+                        //    var success = int.TryParse(child.Id, out int firstLevelId);
+
+                        //    if (success)
+                        //    {
+                        //        // GET THE CHILDREN OF CHILDREN
+                        //        response = await GetChildren(client, firstLevelId);
+
+                        //        if (response.IsSuccessStatusCode)
+                        //        {
+                        //            // CREATE LIST OF CHILDREN OF CHILDREN ID's
+                        //            content = await ReadContent(response);
+                        //            var secondLevelChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
+
+                        //            foreach (var secondLevelChild in secondLevelChildren)
+                        //            {
+                        //                // TRANSLATE SECOND LEVEL
+                        //                success = int.TryParse(secondLevelChild.Id, out int secondLevelId);
+
+                        //                if (success)
+                        //                {
+                        //                    response = await GetContentData(client, secondLevelId);
+
+                        //                    if (response.IsSuccessStatusCode)
+                        //                    {
+                        //                        content = await ReadContent(response);
+                        //                        var contentData = JsonConvert.DeserializeObject<List<ContentData>>(content);
+
+                        //                        foreach (var item in contentData)
+                        //                        {
+                        //                            // ALTER DATA ONLY FOR DATATYPE 0
+                        //                            if (item.DataType == 0)
+                        //                            {
+                        //                                // DEEPLE TRANSLATE 
+                        //                                item.Value = await DeepleTranslate(client, item.Value);
+                        //                            }
+
+                        //                            item.Language = "fr-BE";
+                        //                        }
+
+                        //                        // PUT ALTERED DATA
+                        //                        response = await PutContentData(client, contentData);
+                        //                    }
+                        //                    else
+                        //                    {
+                        //                        Console.WriteLine($"Get Data from content {secondLevelChild.Id} failed \n");
+                        //                        Console.WriteLine($"{await ReadContent(response)} \n");
+                        //                    }
+                        //                }
+                        //            }
+                        //        }
+                        //        else
+                        //        {
+                        //            Console.WriteLine("Get Data from Child-Content-Item failed \n");
+                        //            Console.WriteLine($"{await ReadContent(response)} \n");
+                        //        }
+                        //    }
+                        //}
+                        //#endregion
+
+                        //#region - THIRD LEVEL - CHILDREN OF CHILDREN OF ROOT CONTENT
+                        //// GET CHILDREN OF CHILDREN OF CHILDREN OF ROOT-CONTENT-ITEM AND GO AROUND AGAIN
+                        //foreach (var child in rootChildren)
+                        //{
+                        //    var success = int.TryParse(child.Id, out int firstLevelId);
+
+                        //    if (success)
+                        //    {
+                        //        // GET THE CHILDREN OF CHILDREN
+                        //        response = await GetChildren(client, firstLevelId);
+
+                        //        if (response.IsSuccessStatusCode)
+                        //        {
+                        //            // CREATE LIST OF CHILDREN OF CHILDREN ID's
+                        //            content = await ReadContent(response);
+                        //            var secondLevelChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
+
+                        //            foreach (var secondLevelChild in secondLevelChildren)
+                        //            {
+                        //                success = int.TryParse(secondLevelChild.Id, out int secondLevelId);
+
+                        //                // GET THE CHILDREN OF CHILDREN OF CHILDREN
+                        //                response = await GetChildren(client, secondLevelId);
+
+                        //                if (response.IsSuccessStatusCode)
+                        //                {
+                        //                    // CREATE LIST OF CHILDREN OF CHILDREN OF CHILDREN ID's
+                        //                    content = await ReadContent(response);
+                        //                    var thirdLevelChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
+
+                        //                    foreach (var thirdLevelChild in thirdLevelChildren)
+                        //                    {
+                        //                        // TRANSLATE THIRD LEVEL
+                        //                        success = int.TryParse(thirdLevelChild.Id, out int thirdLevelId);
+
+                        //                        if (success)
+                        //                        {
+                        //                            response = await GetContentData(client, thirdLevelId);
+
+                        //                            if (response.IsSuccessStatusCode)
+                        //                            {
+                        //                                content = await ReadContent(response);
+                        //                                var contentData = JsonConvert.DeserializeObject<List<ContentData>>(content);
+
+                        //                                foreach (var item in contentData)
+                        //                                {
+                        //                                    // ALTER DATA ONLY FOR DATATYPE 0
+                        //                                    if (item.DataType == 0)
+                        //                                    {
+                        //                                        // DEEPLE TRANSLATE 
+                        //                                        item.Value = await DeepleTranslate(client, item.Value);
+                        //                                    }
+
+                        //                                    item.Language = "fr-BE";
+                        //                                }
+
+                        //                                // PUT ALTERED DATA
+                        //                                response = await PutContentData(client, contentData);
+
+                        //                            }
+                        //                            else
+                        //                            {
+                        //                                Console.WriteLine($"Get Data from content {thirdLevelChild.Id} failed \n");
+                        //                                Console.WriteLine($"{await ReadContent(response)} \n");
+                        //                            }
+                        //                        }
+                        //                    }
+
+                        //                }
+                        //            }
+                        //        }
+                        //        else
+                        //        {
+                        //            Console.WriteLine("Get Data from Child-Content-Item failed \n");
+                        //            Console.WriteLine($"{await ReadContent(response)} \n");
+                        //        }
+                        //    }
+                        //}
+                        //#endregion
                     }
-                    #endregion
-
-                    #region - THIRD LEVEL - CHILDREN OF CHILDREN OF ROOT CONTENT
-                    // GET CHILDREN OF CHILDREN OF CHILDREN OF ROOT-CONTENT-ITEM AND GO AROUND AGAIN
-                    foreach (var child in rootChildren)
-                    {
-                        var success = int.TryParse(child.Id, out int firstLevelId);
-
-                        if (success)
-                        {
-                            // GET THE CHILDREN OF CHILDREN
-                            response = await GetChildren(client, firstLevelId);
-
-                            if (response.IsSuccessStatusCode)
-                            {
-                                // CREATE LIST OF CHILDREN OF CHILDREN ID's
-                                content = await ReadContent(response);
-                                var secondLevelChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
-
-                                foreach (var secondLevelChild in secondLevelChildren)
-                                {
-                                    success = int.TryParse(secondLevelChild.Id, out int secondLevelId);
-
-                                    // GET THE CHILDREN OF CHILDREN OF CHILDREN
-                                    response = await GetChildren(client, secondLevelId);
-
-                                    if (response.IsSuccessStatusCode)
-                                    {
-                                        // CREATE LIST OF CHILDREN OF CHILDREN OF CHILDREN ID's
-                                        content = await ReadContent(response);
-                                        var thirdLevelChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
-
-                                        foreach ( var thirdLevelChild in thirdLevelChildren )
-                                        {
-                                            // TRANSLATE THIRD LEVEL
-                                            success = int.TryParse(thirdLevelChild.Id, out int thirdLevelId);
-
-                                            if (success)
-                                            {
-                                                response = await GetContentData(client, thirdLevelId);
-
-                                                if (response.IsSuccessStatusCode)
-                                                {
-                                                    content = await ReadContent(response);
-                                                    var contentData = JsonConvert.DeserializeObject<List<ContentData>>(content);
-
-                                                    foreach (var item in contentData)
-                                                    {
-                                                        // ALTER DATA ONLY FOR DATATYPE 0
-                                                        if (item.DataType == 0)
-                                                        {
-                                                            // DEEPLE TRANSLATE 
-                                                            item.Value = await DeepleTranslate(client, item.Value);
-                                                        }
-
-                                                        item.Language = "fr-BE";
-                                                    }
-
-                                                    // PUT ALTERED DATA
-                                                    response = await PutContentData(client, contentData);
-
-                                                }
-                                                else
-                                                {
-                                                    Console.WriteLine($"Get Data from content {thirdLevelChild.Id} failed \n");
-                                                    Console.WriteLine($"{await ReadContent(response)} \n");
-                                                }
-                                            }
-                                        }
-
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                Console.WriteLine("Get Data from Child-Content-Item failed \n");
-                                Console.WriteLine($"{await ReadContent(response)} \n");
-                            }
-                        }
-                    }
-                    #endregion
                 }
                 else
                 {
@@ -220,6 +231,37 @@ class Program
                 Console.WriteLine("Login failed \n");
                 Console.WriteLine($"{await ReadContent(response)} \n");
             }
+        }
+    }
+
+    private async Task<HttpResponseMessage> GetAlterAndPutContent(HttpClient client, int id)
+    {
+        // GET ALL DATA FROM ALL CHILDREN OF ROOT-CONTENT-ITEM
+        var response = await GetContentData(client, id);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var content = await ReadContent(response);
+            var contentData = JsonConvert.DeserializeObject<List<ContentData>>(content);
+
+            foreach (var item in contentData)
+            {
+                // ALTER DATA ONLY FOR DATATYPE 0
+                if (item.DataType == 0)
+                {
+                    // DEEPLE TRANSLATE 
+                    item.Value = await DeepleTranslate(client, item.Value);
+                }
+
+                item.Language = "fr-BE";
+            }
+
+            // PUT ALTERED DATA
+            return await PutContentData(client, contentData);
+        }
+        else
+        {
+            return response;
         }
     }
 
