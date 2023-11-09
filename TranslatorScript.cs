@@ -19,7 +19,7 @@ class TranslatorScript
 
             if (response.IsSuccessStatusCode)
             {
-                #region - First Level
+                #region - First Gate of Hell
                 // GET ALL DATA FROM ROOT-CONTENT-ITEM
                 response = await GetChildren(client, null);
 
@@ -37,7 +37,7 @@ class TranslatorScript
                             // GET, PROCESS AND PUT FIRST LEVEL DATA 
                             var result = await ProcessContent(client, firstLevelId);
 
-                            #region - Second Level
+                            #region - Second Gate of Hell
                             // GET SECOND LEVEL CHILDREN
                             var secondLevelChildren = await GetChildren(client, firstLevelId);
 
@@ -55,7 +55,7 @@ class TranslatorScript
                                         // GET, PROCESS AND PUT SECOND LEVEL DATA 
                                         result = await ProcessContent(client, secondLevelId);
 
-                                        #region - Third Level
+                                        #region - Third Gate of Hell
                                         // GET THIRD LEVEL CHILDREN
                                         var thirdLevelChildren = await GetChildren(client, secondLevelId);
 
@@ -72,6 +72,60 @@ class TranslatorScript
                                                 {
                                                     // GET, PROCESS AND PUT THIRD LEVEL DATA 
                                                     result = await ProcessContent(client, thirdLevelId);
+
+                                                    #region - Fouth Gate of Hell
+                                                    // GET FOURTH LEVEL CHILDREN
+                                                    var fourthLevelChildren = await GetChildren(client, thirdLevelId);
+
+                                                    if (fourthLevelChildren.IsSuccessStatusCode)
+                                                    {
+                                                        var fourthLevelContent = await ReadContent(fourthLevelChildren);
+                                                        var fourthLevelChildrenIds = JsonConvert.DeserializeObject<List<ContentId>>(fourthLevelContent);
+
+                                                        foreach (var fourthLevelChildId in fourthLevelChildrenIds)
+                                                        {
+                                                            success = int.TryParse(fourthLevelChildId.Id, out int fourthLevelId);
+
+                                                            if (success)
+                                                            {
+                                                                // GET, PROCESS AND PUT FOURTH LEVEL DATA 
+                                                                result = await ProcessContent(client, fourthLevelId);
+
+                                                                #region - Fifth Gate of Hell
+                                                                // GET FIFTH LEVEL CHILDREN
+                                                                var fifthLevelChildren = await GetChildren(client, fourthLevelId);
+
+                                                                if (fifthLevelChildren.IsSuccessStatusCode)
+                                                                {
+                                                                    var fifthLevelContent = await ReadContent(fifthLevelChildren);
+                                                                    var fifthLevelChildrenIds = JsonConvert.DeserializeObject<List<ContentId>>(fifthLevelContent);
+
+                                                                    foreach (var fifthLevelChildId in fifthLevelChildrenIds)
+                                                                    {
+                                                                        success = int.TryParse(fourthLevelChildId.Id, out int fifthLevelId);
+
+                                                                        if (success)
+                                                                        {
+                                                                            // GET, PROCESS AND PUT FIFTH LEVEL DATA 
+                                                                            result = await ProcessContent(client, fifthLevelId);
+                                                                        }
+                                                                    }
+                                                                }
+                                                                else
+                                                                {
+                                                                    Console.WriteLine("Get Fifth Level Children failed \n");
+                                                                    Console.WriteLine($"{await ReadContent(response)} \n");
+                                                                }
+                                                                #endregion
+                                                            }
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        Console.WriteLine("Get Fourth Level Children failed \n");
+                                                        Console.WriteLine($"{await ReadContent(response)} \n");
+                                                    }
+                                                    #endregion
                                                 }
                                             }
                                         }
