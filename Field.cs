@@ -1,8 +1,17 @@
 ﻿using System.Runtime.Serialization;
 
 [DataContract]
-class ContentData
+class Field
 {
+    [DataMember(Name = "id")]
+    public int Id { get; set; }
+
+    [DataMember(Name = "contentItemId")]
+    public int ContentItemId { get; set; }
+
+    [DataMember(Name = "name")]
+    public string Name { get; set; }
+
     [DataMember(Name = "dataType")]
     public int DataType { get; set; }
 
