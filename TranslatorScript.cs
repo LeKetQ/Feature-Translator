@@ -4,6 +4,10 @@ using System.Text;
 
 class TranslatorScript
 {
+    int successes = 0;
+    int failures = 0;
+    StringBuilder stringBuilder = new StringBuilder();
+
     static async Task Main()
     {
         var launch = new TranslatorScript();
@@ -12,154 +16,53 @@ class TranslatorScript
 
     private async Task Run()
     {
+
         using (HttpClient client = new HttpClient())
         {
             // LOGIN
             var response = await Login(client);
 
-            if (response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode)
             {
-                #region - First Gate of Hell
-                // GET ALL DATA FROM ROOT-CONTENT-ITEM
-                response = await GetChildren(client, null);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var content = await ReadContent(response);
-                    var firstLevelChildren = JsonConvert.DeserializeObject<List<ContentId>>(content);
-
-                    foreach (var firstLevelChild in firstLevelChildren)
-                    {
-                        var success = int.TryParse(firstLevelChild.Id, out var firstLevelId);
-
-                        if (success)
-                        {
-                            // GET, PROCESS AND PUT FIRST LEVEL DATA 
-                            var result = await ProcessContent(client, firstLevelId);
-
-                            #region - Second Gate of Hell
-                            // GET SECOND LEVEL CHILDREN
-                            var secondLevelChildren = await GetChildren(client, firstLevelId);
-
-                            if (secondLevelChildren.IsSuccessStatusCode)
-                            {
-                                var secondLevelContent = await ReadContent(secondLevelChildren);
-                                var secondLevelChildrenIds = JsonConvert.DeserializeObject<List<ContentId>>(secondLevelContent);
-
-                                foreach (var secondLevelChildId in secondLevelChildrenIds)
-                                {
-                                    success = int.TryParse(secondLevelChildId.Id, out int secondLevelId);
-
-                                    if (success)
-                                    {
-                                        // GET, PROCESS AND PUT SECOND LEVEL DATA 
-                                        result = await ProcessContent(client, secondLevelId);
-
-                                        #region - Third Gate of Hell
-                                        // GET THIRD LEVEL CHILDREN
-                                        var thirdLevelChildren = await GetChildren(client, secondLevelId);
-
-                                        if (thirdLevelChildren.IsSuccessStatusCode)
-                                        {
-                                            var thirdLevelContent = await ReadContent(thirdLevelChildren);
-                                            var thirdLevelChildrenIds = JsonConvert.DeserializeObject<List<ContentId>>(thirdLevelContent);
-
-                                            foreach (var thirdLevelChildId in thirdLevelChildrenIds)
-                                            {
-                                                success = int.TryParse(thirdLevelChildId.Id, out int thirdLevelId);
-
-                                                if (success)
-                                                {
-                                                    // GET, PROCESS AND PUT THIRD LEVEL DATA 
-                                                    result = await ProcessContent(client, thirdLevelId);
-
-                                                    #region - Fouth Gate of Hell
-                                                    // GET FOURTH LEVEL CHILDREN
-                                                    var fourthLevelChildren = await GetChildren(client, thirdLevelId);
-
-                                                    if (fourthLevelChildren.IsSuccessStatusCode)
-                                                    {
-                                                        var fourthLevelContent = await ReadContent(fourthLevelChildren);
-                                                        var fourthLevelChildrenIds = JsonConvert.DeserializeObject<List<ContentId>>(fourthLevelContent);
-
-                                                        foreach (var fourthLevelChildId in fourthLevelChildrenIds)
-                                                        {
-                                                            success = int.TryParse(fourthLevelChildId.Id, out int fourthLevelId);
-
-                                                            if (success)
-                                                            {
-                                                                // GET, PROCESS AND PUT FOURTH LEVEL DATA 
-                                                                result = await ProcessContent(client, fourthLevelId);
-
-                                                                #region - Fifth Gate of Hell
-                                                                // GET FIFTH LEVEL CHILDREN
-                                                                var fifthLevelChildren = await GetChildren(client, fourthLevelId);
-
-                                                                if (fifthLevelChildren.IsSuccessStatusCode)
-                                                                {
-                                                                    var fifthLevelContent = await ReadContent(fifthLevelChildren);
-                                                                    var fifthLevelChildrenIds = JsonConvert.DeserializeObject<List<ContentId>>(fifthLevelContent);
-
-                                                                    foreach (var fifthLevelChildId in fifthLevelChildrenIds)
-                                                                    {
-                                                                        success = int.TryParse(fourthLevelChildId.Id, out int fifthLevelId);
-
-                                                                        if (success)
-                                                                        {
-                                                                            // GET, PROCESS AND PUT FIFTH LEVEL DATA 
-                                                                            result = await ProcessContent(client, fifthLevelId);
-                                                                        }
-                                                                    }
-                                                                }
-                                                                else
-                                                                {
-                                                                    Console.WriteLine("Get Fifth Level Children failed \n");
-                                                                    Console.WriteLine($"{await ReadContent(response)} \n");
-                                                                }
-                                                                #endregion
-                                                            }
-                                                        }
-                                                    }
-                                                    else
-                                                    {
-                                                        Console.WriteLine("Get Fourth Level Children failed \n");
-                                                        Console.WriteLine($"{await ReadContent(response)} \n");
-                                                    }
-                                                    #endregion
-                                                }
-                                            }
-                                        }
-                                        else
-                                        {
-                                            Console.WriteLine("Get Third Level Children failed \n");
-                                            Console.WriteLine($"{await ReadContent(response)} \n");
-                                        }
-                                        #endregion
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                Console.WriteLine("Get Second Level Children failed \n");
-                                Console.WriteLine($"{await ReadContent(response)} \n");
-                            }
-                            #endregion
-                        }
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("Get First Level Children failed \n");
-                    Console.WriteLine($"{await ReadContent(response)} \n");
-                }
-                #endregion
+                await LogFailure("Login", response);
+                return;
             }
-            else
+
+            // Process each level of children recursively
+            await ProcessLevel(client, null);
+        }
+    }
+
+    private async Task ProcessLevel(HttpClient client, int? parentId)
+    {
+        var response = await GetChildren(client, parentId);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            await LogFailure($"GetChildren for {parentId} failed", response);
+            return;
+        }
+
+        var content = await ReadContent(response);
+        var children = JsonConvert.DeserializeObject<List<ContentId>>(content);
+
+        foreach (var child in children)
+        {
+            if (int.TryParse(child.Id, out var childId))
             {
-                Console.WriteLine("Login failed \n");
-                Console.WriteLine($"{await ReadContent(response)} \n");
+                // GET, PROCESS AND PUT DATA 
+                await ProcessContent(client, childId);
+
+                // Recursively process next level
+                await ProcessLevel(client, childId);
             }
         }
+    }
+
+    private async Task LogFailure(string action, HttpResponseMessage response)
+    {
+        Console.WriteLine($"{action} failed \n");
+        Console.WriteLine($"{await ReadContent(response)} \n");
     }
 
     private async Task<HttpResponseMessage> ProcessContent(HttpClient client, int id)
@@ -182,24 +85,39 @@ class TranslatorScript
                 // MAP THE TRANSLATED VALUE
                 foreach (var field in fields.Where(f => f.DataType == 0))
                 {
-                    field.Value = await DeepleTranslate(client, field.Value);
-
-                    finalContent.Fields
-                        .Where(fc => fc.TemplateFieldId == field.TemplateFieldId)
-                        .ToList()
-                        .ForEach(fc => fc.Value = field.Value);
-
-                    field.Language = "fr-BE";
+                    foreach (var finalContentField in finalContent.Fields)
+                    {
+                        if (finalContentField.TemplateFieldId == field.TemplateFieldId && string.IsNullOrEmpty(finalContentField.Value))
+                        {
+                            finalContentField.Value = await DeepleTranslate(client, field.Value);
+                        }
+                    }
                 }
 
+                if (finalContent.ContentItemChannelId == -1)
+                {
+                    finalContent.ContentItemChannelId = await GetContentItemId(client, id);
+                }
                 finalContent.IsContentItemChannelActive = true;
                 finalContent.Language = "fr-BE";
 
                 response = await PutContent(client, finalContent);
 
-                Console.WriteLine(response.IsSuccessStatusCode
-                    ? $"Content ID: {finalContent.Id} - SUCCESS"
-                    : $"Content ID: {finalContent.Id} - FAILED");
+                if (response.IsSuccessStatusCode)
+                {
+                    this.successes++;
+                }
+                else
+                {
+                    this.failures++;
+
+                    var failedId = $"{finalContent.Id}";
+                    this.stringBuilder.AppendLine($"{failedId.PadRight(5)} - Failed");
+                }
+                Console.Clear();
+                Console.WriteLine($"Successes: {this.successes}");
+                Console.WriteLine($"Failures:  {this.failures}");
+                Console.WriteLine($"{this.stringBuilder}");
             }
         }
 
@@ -211,13 +129,33 @@ class TranslatorScript
         return await client.GetAsync($"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/{id}/Internal/fr-BE/1");
     }
 
+    private async Task<int?> GetContentItemId(HttpClient client, int id)
+    {
+        var response = await client.GetAsync($"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/{id}/Internal/nl-BE/1");
+        var dutchOverheadObject = await ReadContent(response);
+        var finalObject = JsonConvert.DeserializeObject<Content>(dutchOverheadObject);
+
+        if (finalObject.ContentItemChannelId == -1)
+        {
+            response = await client.GetAsync($"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/{id}/Web/nl-BE/1");
+            dutchOverheadObject = await ReadContent(response);
+            finalObject = JsonConvert.DeserializeObject<Content>(dutchOverheadObject);
+        }
+
+        return finalObject.ContentItemChannelId;
+    }
+
     private async Task<HttpResponseMessage> PutContent(HttpClient client, Content content)
     {
-        string putApiUrl = $"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item";
+        string apiUrl = $"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item";
+
+        // PUT TO WEB
+        content.ChannelId = 3; // CHANNEL 3 = WEB
         var rawPayload = JsonConvert.SerializeObject(content);
         var payload = new StringContent(rawPayload, Encoding.UTF8, "application/json");
-        var test = await client.PutAsync(putApiUrl, payload);
-        return test;
+        var response = await client.PutAsync(apiUrl, payload);
+
+        return response;
     }
 
     private async Task<string> DeepleTranslate(HttpClient client, string data)
@@ -232,7 +170,9 @@ class TranslatorScript
             data = await deepleResponse.Content.ReadAsStringAsync();
         }
 
-        return data.TrimStart('"').TrimEnd('"');
+        data.TrimStart('"').TrimEnd('"');
+
+        return data;
     }
 
     private async Task<HttpResponseMessage> Login(HttpClient client)
@@ -266,7 +206,7 @@ class TranslatorScript
     private async Task<HttpResponseMessage> GetContentData(HttpClient client, int id)
     {
         string postApiUrl = "https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/inheritance";
-        var rawPayload = $"{{contentItemId: {id}, channel: \"Internal\", languageCode: \"fr-BE\"}}";
+        var rawPayload = $"{{contentItemId: {id}, channel: \"Web\", languageCode: \"nl-BE\"}}";
         var payload = new StringContent(rawPayload, Encoding.UTF8, "application/json");
         return await client.PostAsync(postApiUrl, payload);
     }
