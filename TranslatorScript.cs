@@ -78,66 +78,64 @@ class TranslatorScript
             var frenchObject = JsonConvert.DeserializeObject<ContentDto>(content);
             var dutchFields = await GetDutchContentData(client, id);
 
-            // IF FRENCH DOES NOT EXIST
-            if (frenchObject.ContentItemChannelId == -1)
+            if (frenchObject != null)
             {
-                frenchObject.Fields = new List<FieldDto>();
-
-                // ONLY TRANSLATE IF THERE IS DUTCH CONTENT
-                if (dutchFields.Any())
+                if (frenchObject.Fields.Any())
                 {
-                    foreach (var field in dutchFields)
+                    // TRANSLATE DUTCH FIELDVALUE IF FRENCH FIELDVALUE IS EMPTY
+                    foreach (var field in frenchObject.Fields)
                     {
-                        var frenchField = new FieldDto()
+                        if (field.Value == null)
                         {
-                            Id = -1,
-                            TemplateFieldId = field.TemplateFieldId,
-                        };
+                            var dutchField = dutchFields.FirstOrDefault(f => f.TemplateFieldId == field.TemplateFieldId);
 
-                        if (field.DataType == 0)
-                        {
-                            frenchField.Value = await DeepleTranslate(client, field.Value);
+                            if (dutchField != null)
+                            {
+                                if (dutchField.DataType == 0)
+                                {
+                                    field.Value = await DeepleTranslate(client, dutchField.Value);
+                                }
+                                else
+                                {
+                                    field.Value = dutchField.Value;
+                                }
+                            }
                         }
-                        else
-                        {
-                            frenchField.Value = field.Value;
-                        }
-
-                        frenchObject.Fields.Add(frenchField);
                     }
                 }
-            }
-
-            // IF FRENCH DOES EXIST
-            else
-            {
-                // TRANSLATE DUTCH FIELDVALUE IF FRENCH FIELDVALUE IS EMPTY
-                foreach (var field in frenchObject.Fields)
+                else
                 {
-                    if (field.Value == null)
+                    // ONLY TRANSLATE IF THERE IS DUTCH CONTENT
+                    if (dutchFields.Any())
                     {
-                        var dutchField = dutchFields.FirstOrDefault(f => f.TemplateFieldId == field.TemplateFieldId);
-
-                        if (dutchField != null)
+                        foreach (var field in dutchFields)
                         {
-                            if (dutchField.DataType == 0)
+                            var frenchField = new FieldDto()
                             {
-                                field.Value = await DeepleTranslate(client, dutchField.Value);
+                                Id = -1,
+                                TemplateFieldId = field.TemplateFieldId,
+                            };
+
+                            if (field.DataType == 0)
+                            {
+                                frenchField.Value = await DeepleTranslate(client, field.Value);
                             }
                             else
                             {
-                                field.Value = dutchField.Value;
+                                frenchField.Value = field.Value;
                             }
+
+                            frenchObject.Fields.Add(frenchField);
                         }
                     }
                 }
-            }
 
-            // ADD VERSION, CHANNEL & LANGUAGE
-            frenchObject.Version = 1;
-            frenchObject.ChannelId = 3;
-            frenchObject.Language = French;
-            frenchObject.IsContentItemChannelActive = true;
+                // ADD VERSION, CHANNEL & LANGUAGE
+                frenchObject.Version = 1;
+                frenchObject.ChannelId = 3;
+                frenchObject.Language = French;
+                frenchObject.IsContentItemChannelActive = true;
+            }
 
             // PUT CONTENT
             response = await PutContent(client, frenchObject);
