@@ -1,4 +1,4 @@
-﻿using Feature_Translator;
+﻿using Feature_Translator.Dtos;
 using Newtonsoft.Json;
 using System.Text;
 
@@ -7,6 +7,8 @@ class TranslatorScript
     int successes = 0;
     int failures = 0;
     StringBuilder stringBuilder = new StringBuilder();
+    const string French = "fr-BE";
+    const string Dutch = "nl-BE";
 
     static async Task Main()
     {
@@ -65,92 +67,102 @@ class TranslatorScript
         Console.WriteLine($"{await ReadContent(response)} \n");
     }
 
-    private async Task<HttpResponseMessage> ProcessContent(HttpClient client, int id)
+    private async Task ProcessContent(HttpClient client, int id)
     {
-        var response = await GetContentData(client, id);
+        var response = await GetFrenchOverheadObject(client, id);
 
         if (response.IsSuccessStatusCode)
         {
+            // READ CONTENT
             var content = await ReadContent(response);
-            var fields = JsonConvert.DeserializeObject<List<Field>>(content);
+            var frenchObject = JsonConvert.DeserializeObject<ContentDto>(content);
+            var dutchFields = await GetDutchContentData(client, id);
 
-            // GET OVERHEAD OBJECT
-            response = await GetOverheadObject(client, id);
-
-            if (response.IsSuccessStatusCode)
+            // IF FRENCH DOES NOT EXIST
+            if (frenchObject.ContentItemChannelId == -1)
             {
-                content = await ReadContent(response);
-                var finalContent = JsonConvert.DeserializeObject<Content>(content);
+                frenchObject.Fields = new List<FieldDto>();
 
-                // MAP THE TRANSLATED VALUE
-                foreach (var field in fields.Where(f => f.DataType == 0))
+                // ONLY TRANSLATE IF THERE IS DUTCH CONTENT
+                if (dutchFields.Any())
                 {
-                    foreach (var finalContentField in finalContent.Fields)
+                    foreach (var field in dutchFields)
                     {
-                        if (finalContentField.TemplateFieldId == field.TemplateFieldId && string.IsNullOrEmpty(finalContentField.Value))
+                        var frenchField = new FieldDto()
                         {
-                            finalContentField.Value = await DeepleTranslate(client, field.Value);
+                            Id = -1,
+                            TemplateFieldId = field.TemplateFieldId,
+                        };
+
+                        if (field.DataType == 0)
+                        {
+                            frenchField.Value = await DeepleTranslate(client, field.Value);
+                        }
+                        else
+                        {
+                            frenchField.Value = field.Value;
+                        }
+
+                        frenchObject.Fields.Add(frenchField);
+                    }
+                }
+            }
+
+            // IF FRENCH DOES EXIST
+            else
+            {
+                // TRANSLATE DUTCH FIELDVALUE IF FRENCH FIELDVALUE IS EMPTY
+                foreach (var field in frenchObject.Fields)
+                {
+                    if (field.Value == null)
+                    {
+                        var dutchField = dutchFields.FirstOrDefault(f => f.TemplateFieldId == field.TemplateFieldId);
+
+                        if (dutchField != null)
+                        {
+                            if (dutchField.DataType == 0)
+                            {
+                                field.Value = await DeepleTranslate(client, dutchField.Value);
+                            }
+                            else
+                            {
+                                field.Value = dutchField.Value;
+                            }
                         }
                     }
                 }
-
-                if (finalContent.ContentItemChannelId == -1)
-                {
-                    finalContent.ContentItemChannelId = await GetContentItemId(client, id);
-                }
-                finalContent.IsContentItemChannelActive = true;
-                finalContent.Language = "fr-BE";
-
-                response = await PutContent(client, finalContent);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    this.successes++;
-                }
-                else
-                {
-                    this.failures++;
-
-                    var failedId = $"{finalContent.Id}";
-                    this.stringBuilder.AppendLine($"{failedId.PadRight(5)} - Failed");
-                }
-                Console.Clear();
-                Console.WriteLine($"Successes: {this.successes}");
-                Console.WriteLine($"Failures:  {this.failures}");
-                Console.WriteLine($"{this.stringBuilder}");
             }
+
+            // ADD VERSION, CHANNEL & LANGUAGE
+            frenchObject.Version = 1;
+            frenchObject.ChannelId = 3;
+            frenchObject.Language = French;
+            frenchObject.IsContentItemChannelActive = true;
+
+            // PUT CONTENT
+            response = await PutContent(client, frenchObject);
         }
 
-        return response;
-    }
-
-    private async Task<HttpResponseMessage> GetOverheadObject(HttpClient client, int id)
-    {
-        return await client.GetAsync($"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/{id}/Internal/fr-BE/1");
-    }
-
-    private async Task<int?> GetContentItemId(HttpClient client, int id)
-    {
-        var response = await client.GetAsync($"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/{id}/Internal/nl-BE/1");
-        var dutchOverheadObject = await ReadContent(response);
-        var finalObject = JsonConvert.DeserializeObject<Content>(dutchOverheadObject);
-
-        if (finalObject.ContentItemChannelId == -1)
+        // LOG ON CONSOLE
+        if (response.IsSuccessStatusCode)
         {
-            response = await client.GetAsync($"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/{id}/Web/nl-BE/1");
-            dutchOverheadObject = await ReadContent(response);
-            finalObject = JsonConvert.DeserializeObject<Content>(dutchOverheadObject);
+            this.successes++;
+        }
+        else
+        {
+            this.failures++;
+            this.stringBuilder.AppendLine($"{id} - Failed");
         }
 
-        return finalObject.ContentItemChannelId;
+        Console.Clear();
+        Console.WriteLine($"Successes: {this.successes}");
+        Console.WriteLine($"Failures:  {this.failures}");
+        Console.WriteLine($"{this.stringBuilder}");
     }
 
-    private async Task<HttpResponseMessage> PutContent(HttpClient client, Content content)
+    private async Task<HttpResponseMessage> PutContent(HttpClient client, ContentDto content)
     {
         string apiUrl = $"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item";
-
-        // PUT TO WEB
-        content.ChannelId = 3; // CHANNEL 3 = WEB
         var rawPayload = JsonConvert.SerializeObject(content);
         var payload = new StringContent(rawPayload, Encoding.UTF8, "application/json");
         var response = await client.PutAsync(apiUrl, payload);
@@ -170,7 +182,7 @@ class TranslatorScript
             data = await deepleResponse.Content.ReadAsStringAsync();
         }
 
-        data.TrimStart('"').TrimEnd('"');
+        data = data.TrimStart('"').TrimEnd('"');
 
         return data;
     }
@@ -203,12 +215,25 @@ class TranslatorScript
         }
     }
 
-    private async Task<HttpResponseMessage> GetContentData(HttpClient client, int id)
+    private async Task<HttpResponseMessage> GetFrenchOverheadObject(HttpClient client, int id)
+    {
+        return await client.GetAsync($"https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/{id}/Web/fr-BE/1");
+    }
+
+    private async Task<List<FieldDto>> GetDutchContentData(HttpClient client, int id)
     {
         string postApiUrl = "https://tide-travelworld8527-staging.azurewebsites.net/api/content-item/inheritance";
-        var rawPayload = $"{{contentItemId: {id}, channel: \"Web\", languageCode: \"nl-BE\"}}";
+        var rawPayload = $"{{contentItemId: {id}, channel: \"Internal\", languageCode: \"nl-BE\"}}";
         var payload = new StringContent(rawPayload, Encoding.UTF8, "application/json");
-        return await client.PostAsync(postApiUrl, payload);
+        var response = await client.PostAsync(postApiUrl, payload);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var content = await ReadContent(response);
+            return JsonConvert.DeserializeObject<List<FieldDto>>(content);
+        }
+
+        return new List<FieldDto>();
     }
 
     private async Task<string> ReadContent(HttpResponseMessage response)
