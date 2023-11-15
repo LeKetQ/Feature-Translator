@@ -91,9 +91,11 @@ class TranslatorScript
 
                             if (dutchField != null)
                             {
-                                if (dutchField.DataType == 0)
+                                if (dutchField.DataType == 0 && field.TemplateFieldId != 79)
                                 {
-                                    field.Value = await DeepleTranslate(client, dutchField.Value);
+                                    var toTranslate = field.Value.Replace("\n", "BISOUS");
+                                    var translation = await DeepleTranslate(client, field.Value);
+                                    field.Value = translation.Replace("&amp;", "&").Replace("BISOUS", "\n");
                                 }
                                 else
                                 {
