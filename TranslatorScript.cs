@@ -116,9 +116,11 @@ class TranslatorScript
                                 TemplateFieldId = field.TemplateFieldId,
                             };
 
-                            if (field.DataType == 0)
+                            if (field.DataType == 0 && field.TemplateFieldId != 79)
                             {
-                                frenchField.Value = await DeepleTranslate(client, field.Value);
+                                var toTranslate = field.Value.Replace("\n", "BISOUS");
+                                var translation = await DeepleTranslate(client, field.Value);
+                                frenchField.Value = translation.Replace("&amp;", "&").Replace("BISOUS", "\n");
                             }
                             else
                             {
