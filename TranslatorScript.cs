@@ -91,11 +91,17 @@ class TranslatorScript
 
                             if (dutchField != null)
                             {
-                                if (dutchField.DataType == 0 && field.TemplateFieldId != 79)
+                                if (dutchField.Value != null 
+                                    && dutchField.DataType == 0 
+                                    && dutchField.TemplateFieldId != 79
+                                    && dutchField.TemplateFieldId != 82)
                                 {
-                                    var toTranslate = field.Value.Replace("\n", "BISOUS");
-                                    var translation = await DeepleTranslate(client, field.Value);
-                                    field.Value = translation.Replace("&amp;", "&").Replace("BISOUS", "\n");
+                                    var toTranslate = dutchField.Value.Replace("\n", "TEXTE ")
+                                                                        .Replace("&nbsp;", "ESPACE ");
+                                    var translation = await DeepleTranslate(client, toTranslate);
+                                    field.Value = translation.Replace("&amp;", "&")
+                                                                .Replace("TEXTE ", "\n")
+                                                                .Replace("ESPACE ", "&nbsp;");
                                 }
                                 else
                                 {
@@ -118,7 +124,9 @@ class TranslatorScript
                                 TemplateFieldId = field.TemplateFieldId,
                             };
 
-                            if (field.DataType == 0 && field.TemplateFieldId != 79)
+                            if (field.Value != null 
+                                && field.DataType == 0 
+                                && field.TemplateFieldId != 79)
                             {
                                 var toTranslate = field.Value.Replace("\n", "BISOUS");
                                 var translation = await DeepleTranslate(client, field.Value);
